@@ -7,6 +7,7 @@ import requests
 import sqlite3
 import pandas as pd
 from datetime import datetime, timedelta
+from brainboost_data_source_logger_package.Notifications import Notifications
 
 
 from brainboost_data_source_logger_package.BBLogEntry import BBLogEntry  # Replace with actual import path
@@ -391,7 +392,7 @@ class BBLogger:
                     print(f"Failed to send log to {url}: {e}")
 
             if telegram:
-                send_notification(BBConfig.get('log_notification_telegram'), log_entry)
+                Notifications.send_telegram_message(message=message)
             if slack:
                 send_notification(BBConfig.get('log_notification_slack'), log_entry)
             if url_notification:

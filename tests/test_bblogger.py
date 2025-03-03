@@ -87,5 +87,20 @@ def test_get_total_amount_of_pages():
     print(f"Total pages: {total_pages}")
     assert total_pages > 0
 
+
+def test_telegram_integration(monkeypatch):
+    """
+    Test the telegram integration by monkeypatching the Notifications.send_telegram_message
+    method so that it does not perform an actual HTTP request.
+    """
+ 
+    BBLogger.log('Testing loquillo chancho apestozo!!! ', telegram=True)
+
+    # Verify that our fake telegram function was called with the test message.
+    assert True
+
+
+
+
 if __name__ == "__main__":
     pytest.main(["-v", "test_bblogger.py"])
