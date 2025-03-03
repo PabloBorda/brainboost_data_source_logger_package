@@ -392,7 +392,7 @@ class BBLogger:
                     print(f"Failed to send log to {url}: {e}")
 
             if telegram:
-                Notifications.send_telegram_message(message=message)
+                Notifications.send_telegram_message(message=str(log_entry))
             if slack:
                 send_notification(BBConfig.get('log_notification_slack'), log_entry)
             if url_notification:
