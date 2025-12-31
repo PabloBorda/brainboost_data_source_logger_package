@@ -18,7 +18,11 @@ class BBLogEntry:
     def __str__(self):
         # Use csv module to handle proper escaping
         output = io.StringIO()
-        writer = csv.writer(output, delimiter=BBConfig.get('log_delimiter'), quotechar='"', quoting=csv.QUOTE_ALL)
+        try:
+            delimiter = BBConfig.get('log_delimiter')
+        except Exception:
+            delimiter = ','
+        writer = csv.writer(output, delimiter=delimiter, quotechar='"', quoting=csv.QUOTE_ALL)
 
         writer.writerow([
             self.timestamp,
@@ -29,4 +33,3 @@ class BBLogEntry:
             self.processing_time
         ])
         return output.getvalue().strip()
-

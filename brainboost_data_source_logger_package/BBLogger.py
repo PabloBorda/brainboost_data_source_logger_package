@@ -17,6 +17,39 @@ class BBLogger:
     _process_name: Optional[str] = None
     _last_time: Optional[datetime] = None
     _delta: Optional[datetime] = None
+    _config_disabled: bool = False
+    _default_config = {
+        'log_debug_mode': True,
+        'log_enable_files': False,
+        'log_enable_terminal_output': True,
+        'log_enable_database': False,
+        'log_sqlite3_path': os.path.join('logs', 'brainboost_logs.sqlite3'),
+        'log_columns': ['timestamp', 'log_type', 'process', 'code_location', 'message', 'processing_time'],
+        'log_path': 'logs',
+        'log_prefix': 'brainboost',
+        'log_delimiter': ',',
+        'log_page_size': 100,
+        'log_notification_slack': '',
+        'log_notification_url': ''
+    }
+
+    @classmethod
+    def _get_config(cls, key: str):
+        if cls._config_disabled:
+            return cls._default_config.get(key)
+        try:
+            return BBConfig.get(key)
+        except FileNotFoundError:
+            cls._config_disabled = True
+            return cls._default_config.get(key)
+        except Exception:
+            return cls._default_config.get(key)
+
+    @classmethod
+    def _ensure_parent_dir(cls, path: str) -> None:
+        dir_path = os.path.dirname(path)
+        if dir_path and not os.path.exists(dir_path):
+            os.makedirs(dir_path, exist_ok=True)
 
     @classmethod
     def _get_process_name(cls) -> str:
@@ -26,11 +59,14 @@ class BBLogger:
 
     @classmethod
     def _initialize_database(cls):
-        db_path = BBConfig.get('log_sqlite3_path')
+        db_path = cls._get_config('log_sqlite3_path')
+        if not db_path:
+            return
+        cls._ensure_parent_dir(db_path)
         if not os.path.exists(db_path):
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
-            columns = BBConfig.get('log_columns')
+            columns = cls._get_config('log_columns')
             columns_str = ", ".join([f"{col} TEXT" for col in columns])
             cursor.execute(f"CREATE TABLE logs ({columns_str});")
             conn.commit()
@@ -38,10 +74,13 @@ class BBLogger:
 
     @classmethod
     def _write_to_database(cls, log_entry: BBLogEntry):
-        db_path = BBConfig.get('log_sqlite3_path')
+        db_path = cls._get_config('log_sqlite3_path')
+        if not db_path:
+            return
+        cls._ensure_parent_dir(db_path)
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        columns = BBConfig.get('log_columns')
+        columns = cls._get_config('log_columns')
         cursor.execute(
             f"INSERT INTO logs ({', '.join(columns)}) VALUES ({', '.join(['?' for _ in columns])});",
             [
@@ -59,19 +98,23 @@ class BBLogger:
     @classmethod
     def _write_to_log_file(cls, log_entry: BBLogEntry):
         current_date = cls._last_time.strftime('%Y_%m_%d')
-        log_file_path = os.path.join(BBConfig.get('log_path'), f"{BBConfig.get('log_prefix')}_log_{current_date}.log")
+        log_path = cls._get_config('log_path')
+        log_prefix = cls._get_config('log_prefix')
+        log_file_path = os.path.join(log_path, f"{log_prefix}_log_{current_date}.log")
+        if log_path and not os.path.exists(log_path):
+            os.makedirs(log_path, exist_ok=True)
         file_exists = os.path.isfile(log_file_path)
 
         try:
             with open(log_file_path, 'a+', encoding='utf-8', newline='') as log_file:
                 writer = csv.writer(
                     log_file,
-                    delimiter=BBConfig.get('log_delimiter'),
+                    delimiter=cls._get_config('log_delimiter'),
                     quotechar="'",
                     quoting=csv.QUOTE_MINIMAL
                 )
                 if not file_exists:
-                    writer.writerow(BBConfig.get('log_columns'))
+                    writer.writerow(cls._get_config('log_columns'))
                 writer.writerow([
                     log_entry.timestamp,
                     log_entry.log_type,
@@ -94,15 +137,15 @@ class BBLogger:
         :raises ValueError: If the page number is invalid.
         """
         # Retrieve page size from configuration
-        page_size = BBConfig.get('log_page_size')
+        page_size = cls._get_config('log_page_size')
         
         # Get today's date in 'YYYY_MM_DD' format
         current_date = datetime.now().strftime('%Y_%m_%d')
         
         # Construct the log file path
         log_file_path = os.path.join(
-            BBConfig.get('log_path'),
-            f"{BBConfig.get('log_prefix')}_log_{current_date}.log"
+            cls._get_config('log_path'),
+            f"{cls._get_config('log_prefix')}_log_{current_date}.log"
         )
 
         # Check if the log file exists
@@ -114,17 +157,17 @@ class BBLogger:
             with open(log_file_path, 'r', encoding='utf-8') as log_file:
                 reader = csv.reader(
                     log_file,
-                    delimiter=BBConfig.get('log_delimiter'),
+                    delimiter=cls._get_config('log_delimiter'),
                     quotechar="'"
                 )
                 logs = list(reader)
 
                 # Extract headers if present
-                if logs and logs[0] == BBConfig.get('log_columns'):
+                if logs and logs[0] == cls._get_config('log_columns'):
                     headers = logs[0]
                     logs = logs[1:]
                 else:
-                    headers = BBConfig.get('log_columns')
+                    headers = cls._get_config('log_columns')
 
                 total_logs = len(logs)
                 total_pages = (total_logs + page_size - 1) // page_size  # Ceiling division
@@ -158,7 +201,7 @@ class BBLogger:
         :param end_line: The ending line number (inclusive).
         :return: Pandas DataFrame of log entries within the specified range.
         """
-        log_file_path = os.path.join(BBConfig.get('log_path'), f"{BBConfig.get('log_prefix')}_log_{date}.log")
+        log_file_path = os.path.join(cls._get_config('log_path'), f"{cls._get_config('log_prefix')}_log_{date}.log")
 
         if not os.path.exists(log_file_path):
             raise FileNotFoundError(f"Log file for {date} does not exist: {log_file_path}")
@@ -167,13 +210,13 @@ class BBLogger:
             with open(log_file_path, 'r', encoding='utf-8') as log_file:
                 reader = csv.reader(
                     log_file,
-                    delimiter=BBConfig.get('log_delimiter'),
+                    delimiter=cls._get_config('log_delimiter'),
                     quotechar="'"
                 )
                 logs = list(reader)
 
                 # Skip header row if it exists
-                if logs and logs[0] == BBConfig.get('log_columns'):
+                if logs and logs[0] == cls._get_config('log_columns'):
                     headers = logs[0]
                     logs = logs[1:]
                 else:
@@ -198,14 +241,14 @@ class BBLogger:
         :return: Total number of pages available.
         :raises Exception: If no logs are available for today and no date is provided.
         """
-        page_size = BBConfig.get('log_page_size')
+        page_size = cls._get_config('log_page_size')
         if date is None:
             date = datetime.now().strftime('%Y_%m_%d')
             is_today = True
         else:
             is_today = False
 
-        log_file_path = os.path.join(BBConfig.get('log_path'), f"{BBConfig.get('log_prefix')}_log_{date}.log")
+        log_file_path = os.path.join(cls._get_config('log_path'), f"{cls._get_config('log_prefix')}_log_{date}.log")
 
         if not os.path.exists(log_file_path):
             if is_today:
@@ -217,13 +260,13 @@ class BBLogger:
             with open(log_file_path, 'r', encoding='utf-8') as log_file:
                 reader = csv.reader(
                     log_file,
-                    delimiter=BBConfig.get('log_delimiter'),
+                    delimiter=cls._get_config('log_delimiter'),
                     quotechar="'"
                 )
                 logs = list(reader)
 
                 # Remove header row if it exists
-                if logs and logs[0] == BBConfig.get('log_columns'):
+                if logs and logs[0] == cls._get_config('log_columns'):
                     logs = logs[1:]
 
                 total_entries = len(logs)
@@ -254,8 +297,8 @@ class BBLogger:
 
         # Construct log file path
         log_file_path = os.path.join(
-            BBConfig.get('log_path'),
-            f"{BBConfig.get('log_prefix')}_log_{formatted_date}.log"
+            cls._get_config('log_path'),
+            f"{cls._get_config('log_prefix')}_log_{formatted_date}.log"
         )
 
         if not os.path.exists(log_file_path):
@@ -265,16 +308,16 @@ class BBLogger:
             # Determine if the log file has a header
             with open(log_file_path, 'r', encoding='utf-8') as f:
                 first_line = f.readline().strip()
-                has_header = first_line == ",".join(BBConfig.get('log_columns'))
+                has_header = first_line == ",".join(cls._get_config('log_columns'))
 
             # Read the log file into a pandas DataFrame
             df = pd.read_csv(
                 log_file_path,
-                delimiter=BBConfig.get('log_delimiter'),
+                delimiter=cls._get_config('log_delimiter'),
                 quotechar="'",
                 encoding='utf-8',
                 header=0 if has_header else None,
-                names=BBConfig.get('log_columns') if not has_header else None
+                names=cls._get_config('log_columns') if not has_header else None
             )
 
             return df
@@ -345,7 +388,7 @@ class BBLogger:
         
     @classmethod
     def log(cls, message, telegram: bool = False, slack: bool = False, url_notification: bool = False):
-        if BBConfig.get('log_debug_mode'):
+        if cls._get_config('log_debug_mode'):
 
             def is_error_message(message):
                 possible_error_words = ['error', 'exception', 'failed', 'missing']
@@ -374,13 +417,13 @@ class BBLogger:
                 code_location=code_location
             )
 
-            if BBConfig.get('log_enable_files'):
+            if cls._get_config('log_enable_files'):
                 cls._write_to_log_file(log_entry)
 
-            if BBConfig.get('log_enable_terminal_output'):
+            if cls._get_config('log_enable_terminal_output'):
                 print(log_entry)
 
-            if BBConfig.get('log_enable_database'):
+            if cls._get_config('log_enable_database'):
                 cls._initialize_database()
                 cls._write_to_database(log_entry)
 
@@ -394,6 +437,10 @@ class BBLogger:
             if telegram:
                 Notifications.send_telegram_message(message=str(log_entry))
             if slack:
-                send_notification(BBConfig.get('log_notification_slack'), log_entry)
+                slack_url = cls._get_config('log_notification_slack')
+                if slack_url:
+                    send_notification(slack_url, log_entry)
             if url_notification:
-                send_notification(BBConfig.get('log_notification_url'), log_entry)
+                url = cls._get_config('log_notification_url')
+                if url:
+                    send_notification(url, log_entry)
