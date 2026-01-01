@@ -38,7 +38,12 @@ class BBLogger:
         if cls._config_disabled:
             return cls._default_config.get(key)
         try:
-            return BBConfig.get(key)
+            value = BBConfig.get(key)
+            if value is None:
+                value = BBConfig.get(key.upper())
+            if value is None:
+                return cls._default_config.get(key)
+            return value
         except FileNotFoundError:
             cls._config_disabled = True
             return cls._default_config.get(key)
