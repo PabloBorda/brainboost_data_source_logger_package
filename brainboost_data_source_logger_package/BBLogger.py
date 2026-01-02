@@ -18,6 +18,7 @@ class BBLogger:
     _last_time: Optional[datetime] = None
     _delta: Optional[datetime] = None
     _config_disabled: bool = False
+    _log_file_path: Optional[str] = None
     _default_config = {
         'log_debug_mode': True,
         'log_enable_files': False,
@@ -30,7 +31,9 @@ class BBLogger:
         'log_delimiter': ',',
         'log_page_size': 100,
         'log_notification_slack': '',
-        'log_notification_url': ''
+        'log_notification_url': '',
+        'log_file_naming': 'daily',
+        'log_file_name_convention': 'YYYY_MM_DD_HH_MM_SS-[process]-log.log'
     }
 
     @classmethod
@@ -68,6 +71,35 @@ class BBLogger:
         if not cls._process_name:
             cls._process_name = os.path.splitext(os.path.basename(sys.argv[0]))[0]
         return cls._process_name
+
+    @classmethod
+    def _format_log_file_name(cls, convention: str, now: datetime, log_prefix: str) -> str:
+        file_name = convention
+        file_name = file_name.replace('YYYY_MM_DD_HH_MM_SS', now.strftime('%Y_%m_%d_%H_%M_%S'))
+        file_name = file_name.replace('YYYY_MM_DD', now.strftime('%Y_%m_%d'))
+        file_name = file_name.replace('[process]', cls._get_process_name())
+        file_name = file_name.replace('${LOG_PREFIX}', str(log_prefix))
+        return file_name
+
+    @classmethod
+    def _get_log_file_path(cls, date: Optional[str] = None) -> str:
+        log_path = cls._get_config('log_path')
+        log_prefix = cls._get_config('log_prefix')
+        if date:
+            return os.path.join(log_path, f"{log_prefix}_log_{date}.log")
+
+        naming = str(cls._get_config('log_file_naming') or 'daily').lower()
+        if naming == 'per_run':
+            if cls._log_file_path:
+                return cls._log_file_path
+            convention = cls._get_config('log_file_name_convention') or 'YYYY_MM_DD_HH_MM_SS-[process]-log.log'
+            now = cls._last_time or datetime.now()
+            file_name = cls._format_log_file_name(convention, now, log_prefix)
+            cls._log_file_path = os.path.join(log_path, file_name)
+            return cls._log_file_path
+
+        current_date = (cls._last_time or datetime.now()).strftime('%Y_%m_%d')
+        return os.path.join(log_path, f"{log_prefix}_log_{current_date}.log")
 
     @classmethod
     def _initialize_database(cls):
@@ -109,10 +141,8 @@ class BBLogger:
 
     @classmethod
     def _write_to_log_file(cls, log_entry: BBLogEntry):
-        current_date = cls._last_time.strftime('%Y_%m_%d')
         log_path = cls._get_config('log_path')
-        log_prefix = cls._get_config('log_prefix')
-        log_file_path = os.path.join(log_path, f"{log_prefix}_log_{current_date}.log")
+        log_file_path = cls._get_log_file_path()
         if log_path and not os.path.exists(log_path):
             os.makedirs(log_path, exist_ok=True)
         file_exists = os.path.isfile(log_file_path)
@@ -151,14 +181,8 @@ class BBLogger:
         # Retrieve page size from configuration
         page_size = cls._get_config('log_page_size')
         
-        # Get today's date in 'YYYY_MM_DD' format
-        current_date = datetime.now().strftime('%Y_%m_%d')
-        
         # Construct the log file path
-        log_file_path = os.path.join(
-            cls._get_config('log_path'),
-            f"{cls._get_config('log_prefix')}_log_{current_date}.log"
-        )
+        log_file_path = cls._get_log_file_path()
 
         # Check if the log file exists
         if not os.path.exists(log_file_path):
@@ -259,8 +283,10 @@ class BBLogger:
             is_today = True
         else:
             is_today = False
-
-        log_file_path = os.path.join(cls._get_config('log_path'), f"{cls._get_config('log_prefix')}_log_{date}.log")
+        if is_today:
+            log_file_path = cls._get_log_file_path()
+        else:
+            log_file_path = os.path.join(cls._get_config('log_path'), f"{cls._get_config('log_prefix')}_log_{date}.log")
 
         if not os.path.exists(log_file_path):
             if is_today:

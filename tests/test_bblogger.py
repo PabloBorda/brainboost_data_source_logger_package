@@ -15,22 +15,37 @@ def test_get_config_accepts_uppercase_and_lowercase_keys():
     overrides_backup = BBConfig._overrides.copy()
     config_file_backup = BBConfig._config_file
     config_disabled_backup = BBLogger._config_disabled
+    last_time_backup = BBLogger._last_time
+    log_file_path_backup = BBLogger._log_file_path
     try:
         BBConfig._conf = {
             "LOG_PATH": "tests/logs_upper",
             "log_path": "tests/logs_lower",
+            "LOG_FILE_NAMING": "per_run",
+            "LOG_FILE_NAME_CONVENTION": "YYYY_MM_DD_HH_MM_SS-[process]-${LOG_PREFIX}-log.log",
+            "LOG_PREFIX": "bb",
         }
         BBConfig._overrides = {}
         BBConfig._config_file = "tests/dummy.conf"
         BBLogger._config_disabled = False
+        BBLogger._log_file_path = None
+        BBLogger._last_time = datetime(2024, 1, 2, 3, 4, 5)
 
         assert BBLogger._get_config("log_path") == "tests/logs_lower"
         assert BBLogger._get_config("LOG_PATH") == "tests/logs_upper"
+        first_path = BBLogger._get_log_file_path()
+        second_path = BBLogger._get_log_file_path()
+        assert first_path == second_path
+        assert "2024_01_02_03_04_05" in first_path
+        assert "bb" in first_path
+        assert BBLogger._get_process_name() in first_path
     finally:
         BBConfig._conf = conf_backup
         BBConfig._overrides = overrides_backup
         BBConfig._config_file = config_file_backup
         BBLogger._config_disabled = config_disabled_backup
+        BBLogger._last_time = last_time_backup
+        BBLogger._log_file_path = log_file_path_backup
 
 def test_bblogger_inserts_millions_of_logs():
     """Test BBLogger by inserting a couple of million log lines."""
