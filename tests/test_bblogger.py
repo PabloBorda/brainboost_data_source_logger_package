@@ -10,6 +10,28 @@ def random_message(length=50):
     """Generate a random string of fixed length."""
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
+def test_get_config_accepts_uppercase_and_lowercase_keys():
+    conf_backup = BBConfig._conf.copy()
+    overrides_backup = BBConfig._overrides.copy()
+    config_file_backup = BBConfig._config_file
+    config_disabled_backup = BBLogger._config_disabled
+    try:
+        BBConfig._conf = {
+            "LOG_PATH": "tests/logs_upper",
+            "log_path": "tests/logs_lower",
+        }
+        BBConfig._overrides = {}
+        BBConfig._config_file = "tests/dummy.conf"
+        BBLogger._config_disabled = False
+
+        assert BBLogger._get_config("log_path") == "tests/logs_lower"
+        assert BBLogger._get_config("LOG_PATH") == "tests/logs_upper"
+    finally:
+        BBConfig._conf = conf_backup
+        BBConfig._overrides = overrides_backup
+        BBConfig._config_file = config_file_backup
+        BBLogger._config_disabled = config_disabled_backup
+
 def test_bblogger_inserts_millions_of_logs():
     """Test BBLogger by inserting a couple of million log lines."""
 

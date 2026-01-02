@@ -38,9 +38,16 @@ class BBLogger:
         if cls._config_disabled:
             return cls._default_config.get(key)
         try:
-            value = BBConfig.get(key)
+            try:
+                value = BBConfig.get(key)
+            except KeyError:
+                value = None
             if value is None:
-                value = BBConfig.get(key.upper())
+                alt_key = key.upper() if key == key.lower() else key.lower()
+                try:
+                    value = BBConfig.get(alt_key)
+                except KeyError:
+                    value = None
             if value is None:
                 return cls._default_config.get(key)
             return value
