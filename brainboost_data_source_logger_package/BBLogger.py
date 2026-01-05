@@ -37,6 +37,25 @@ class BBLogger:
     }
 
     @classmethod
+    def _normalize_bool(cls, value):
+        """
+        Normalize various boolean representations to actual bool values.
+        Accepts: true/false strings (case-insensitive), 1/0, yes/no, on/off.
+        Returns actual bools unchanged.
+        """
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return bool(value)
+        if isinstance(value, str):
+            lower_val = value.lower().strip()
+            if lower_val in ('true', '1', 'yes', 'on'):
+                return True
+            if lower_val in ('false', '0', 'no', 'off'):
+                return False
+        return value
+
+    @classmethod
     def _get_config(cls, key: str):
         if cls._config_disabled:
             return cls._default_config.get(key)
@@ -426,7 +445,7 @@ class BBLogger:
         
     @classmethod
     def log(cls, message, telegram: bool = False, slack: bool = False, url_notification: bool = False):
-        if cls._get_config('log_debug_mode'):
+        if cls._normalize_bool(cls._get_config('log_debug_mode')):
 
             def is_error_message(message):
                 possible_error_words = ['error', 'exception', 'failed', 'missing']
@@ -455,13 +474,13 @@ class BBLogger:
                 code_location=code_location
             )
 
-            if cls._get_config('log_enable_files'):
+            if cls._normalize_bool(cls._get_config('log_enable_files')):
                 cls._write_to_log_file(log_entry)
 
-            if cls._get_config('log_enable_terminal_output'):
+            if cls._normalize_bool(cls._get_config('log_enable_terminal_output')):
                 print(log_entry)
 
-            if cls._get_config('log_enable_database'):
+            if cls._normalize_bool(cls._get_config('log_enable_database')):
                 cls._initialize_database()
                 cls._write_to_database(log_entry)
 
