@@ -1,6 +1,7 @@
 import os
 import sys
 import traceback
+import re
 from typing import Optional
 import csv
 import requests
@@ -448,12 +449,12 @@ class BBLogger:
         if cls._normalize_bool(cls._get_config('log_debug_mode')):
 
             def is_error_message(message):
-                possible_error_words = ['error', 'exception', 'failed', 'missing']
-                return any(word in message.lower() for word in possible_error_words)
+                error_pattern = re.compile(r'\b(error|errors|exception|exceptions|failed|missing)\b', re.IGNORECASE)
+                return bool(error_pattern.search(message))
 
             def is_warning_message(message):
-                possible_warning_words = ['warning', 'aware', 'careful']
-                return any(word in message.lower() for word in possible_warning_words)
+                warning_pattern = re.compile(r'\b(warning|aware|careful)\b', re.IGNORECASE)
+                return bool(warning_pattern.search(message))
 
             log_type = 'error' if is_error_message(message) else 'warning' if is_warning_message(message) else 'message'
 
