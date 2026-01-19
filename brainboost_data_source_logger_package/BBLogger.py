@@ -93,6 +93,15 @@ class BBLogger:
         return cls._process_name
 
     @classmethod
+    def _safe_print(cls, value) -> None:
+        try:
+            print(value)
+        except UnicodeEncodeError:
+            encoding = sys.stdout.encoding or "utf-8"
+            safe_text = str(value).encode(encoding, errors="backslashreplace").decode(encoding, errors="ignore")
+            print(safe_text)
+
+    @classmethod
     def _format_log_file_name(cls, convention: str, now: datetime, log_prefix: str) -> str:
         file_name = convention
         file_name = file_name.replace('YYYY_MM_DD_HH_MM_SS', now.strftime('%Y_%m_%d_%H_%M_%S'))
@@ -479,7 +488,7 @@ class BBLogger:
                 cls._write_to_log_file(log_entry)
 
             if cls._normalize_bool(cls._get_config('log_enable_terminal_output')):
-                print(log_entry)
+                cls._safe_print(log_entry)
 
             if cls._normalize_bool(cls._get_config('log_enable_database')):
                 cls._initialize_database()
